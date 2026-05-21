@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Universal Clipboard – Client</title>
+
+    <style>
+      :root {
+        --bg: #f4f6f8;
+        --card: #ffffff;
+        --primary: #2563eb;
+        --text: #111827;
+        --muted: #6b7280;
+        --border: #e5e7eb;
+        --radius: 10px;
+        --highlight: #fde68a;
+      }
+
+      body.dark {
+        --bg: #0f172a;
+        --card: #020617;
+        --primary: #60a5fa;
+        --text: #e5e7eb;
+        --muted: #94a3b8;
+        --border: #1e293b;
+        --highlight: #92400e;
+      }
+
+      body {
+        margin: 0;
+        padding: 16px;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial;
+        background: var(--bg);
+        color: var(--text);
+      }
+
+      h2 {
+        margin: 0 0 12px;
+        font-size: 18px;
+      }
+
+      .container {
+        max-width: 420px;
+        margin: auto;
+      }
+
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 14px;
+        margin-bottom: 14px;
+      }
+
+      .top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      input {
+        width: 67%;
+        padding: 8px;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        font-size: 13px;
+      }
+
+      button {
+        padding: 8px;
+        border-radius: 8px;
+        border: none;
+        background: var(--primary);
+        color: white;
+        cursor: pointer;
+      }
+
+      .secondary {
+        background: transparent;
+        color: var(--primary);
+        border: 1px solid var(--border);
+      }
+
+      #clipboard {
+        border: 1px dashed var(--border);
+        border-radius: 8px;
+        padding: 10px;
+        min-height: 60px;
+        background: rgba(0, 0, 0, 0.02);
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+
+      #history {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        max-height: 220px;
+        overflow-y: auto;
+      }
+
+      #history li {
+        padding: 8px;
+        border-bottom: 1px solid var(--border);
+        cursor: pointer;
+      }
+
+      #history li:hover {
+        background: rgba(0, 0, 0, 0.04);
+      }
+
+      .history-title {
+        font-size: 12px;
+        opacity: 0.7;
+        margin-bottom: 4px;
+      }
+
+      .history-content {
+        font-size: 13px;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+
+      .history-image {
+        max-width: 100%;
+        max-height: 140px;
+        object-fit: contain;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        background: rgba(0, 0, 0, 0.04);
+        padding: 4px;
+        cursor: pointer;
+        transition:
+          transform 0.15s ease,
+          box-shadow 0.15s ease;
+      }
+
+      .history-image:hover {
+        transform: scale(1.02);
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
+      }
+
+      img.preview {
+        max-width: 100%;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        margin-top: 6px;
+      }
+
+      #status {
+        font-size: 13px;
+        color: var(--muted);
+      }
+
+      #toast {
+        position: fixed;
+        bottom: 24px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: var(--card);
+        color: var(--text);
+        border: 1px solid var(--border);
+        padding: 10px 16px;
+        border-radius: 10px;
+        font-size: 13px;
+        font-weight: 500;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+        opacity: 0;
+        pointer-events: none;
+
+        /* 🔥 FIX */
+        z-index: 2147483647;
+
+        transition:
+          opacity 0.25s ease,
+          transform 0.25s ease;
+      }
+
+      #toast.show {
+        opacity: 1;
+        transform: translateX(-50%) translateY(-6px);
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="container">
+      <div class="top">
+        <h2>Universal Clipboard</h2>
+        <button id="darkToggle" class="secondary">🌙</button>
+      </div>
+
+      <div class="card">
+        <div id="status">Connecting…</div>
+      </div>
+
+      <!-- Pair with code -->
+      <div
+        class="card"
+        style="
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+        "
+      >
+        <input id="codeInput" placeholder="Enter pairing code" />
+        <button id="pairBtn">Pair Device</button>
+      </div>
+
+      <!-- Last Clipboard -->
+      <div class="card">
+        <strong>Last Clipboard</strong>
+        <div id="clipboard">—</div>
+      </div>
+
+      <!-- Search -->
+      <div class="card">
+        <input
+          id="searchInput"
+          placeholder="Search clipboard history…"
+          style="width: 95%"
+        />
+      </div>
+
+      <!-- History -->
+      <div class="card">
+        <strong>Clipboard History</strong>
+        <ul id="history"></ul>
+      </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast"></div>
+
+    <script src="renderer.js"></script>
+  </body>
+</html>

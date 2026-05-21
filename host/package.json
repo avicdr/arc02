@@ -1,0 +1,43 @@
+{
+  "name": "universal-clipboard-host",
+  "version": "1.0.0",
+  "description": "Universal Clipboard Sync – Host",
+  "author": "",
+  "license": "ISC",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "start": "electron .",
+    "build:portable": "electron-builder --win portable",
+    "build": "electron-builder"
+  },
+  "dependencies": {
+    "qrcode": "^1.5.4",
+    "ws": "^8.19.0"
+  },
+  "devDependencies": {
+    "electron": "^39.2.7",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.yourname.universalclipboard.host",
+    "productName": "Universal Clipboard Host",
+    "asar": true,
+    "files": [
+      "**/*",
+      "!node_modules/.cache/**"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "icon": "icon.ico",
+      "target": [
+        "portable"
+      ]
+    },
+    "portable": {
+      "artifactName": "UniversalClipboard-Host-Portable.exe"
+    }
+  }
+}
