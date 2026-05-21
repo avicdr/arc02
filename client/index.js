@@ -20,7 +20,7 @@ const crypto = require("crypto");
 
 /* ================= CONFIG ================= */
 
-const WS_SERVER = "ws://localhost:8080";
+const WS_SERVER = "wss://backend-unv.onrender.com";
 const HISTORY_LIMIT = 20;
 
 const DEVICE_ID = crypto.randomUUID();
@@ -318,7 +318,7 @@ setInterval(() => {
     JSON.stringify({
       type: "CLIP_UPDATE",
       contentType: "text",
-      payload: { data: text },
+      payload: MASTER_KEY ? encrypt(Buffer.from(text)) : { data: text },
       timestamp: Date.now(),
     }),
   );

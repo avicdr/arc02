@@ -21,8 +21,8 @@ const crypto = require("crypto");
 
 /* ================= CONFIG ================= */
 
-const WS_SERVER = "ws://localhost:8080";
-const HTTP_SERVER = "http://localhost:8080";
+const WS_SERVER = "wss://backend-unv.onrender.com";
+const HTTP_SERVER = "https://backend-unv.onrender.com";
 
 // Unique per machine — devices on different machines will have different IDs
 const USER_ID = `user-${os.hostname().replace(/[^a-z0-9]/gi, "-").toLowerCase()}`;
@@ -281,19 +281,8 @@ function connectWebSocket() {
       // Ignore host self-auth
       if (isSelfAuth(data)) return;
 
-      // Remote device paired → stop pairing
-      if (pairingInProgress) {
-        pairingInProgress = false;
-        pairingSession = null;
-
-        if (pairingInterval) clearInterval(pairingInterval);
-        pairingInterval = null;
-
-        send("pairing-update", { code: null, qr: null });
-
-        // RE-ENABLE PAIRING FOR NEXT DEVICE
-        schedulePairingRegeneration(2000);
-      }
+      // A remote device paired — keep the pairing code active for more devices
+      send("status-update", "Device connected — pairing code still active");
 
       return;
     }

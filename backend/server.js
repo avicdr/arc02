@@ -164,7 +164,7 @@ wss.on("connection", (ws) => {
           ws.send(JSON.stringify({ type: "AUTH_FAIL" }));
           return;
         }
-        pairingTokens.delete(data.pairingToken);
+        // Token stays active until it expires — allows multiple devices to pair
         userId = record.userId;
       }
 
@@ -261,6 +261,7 @@ wss.on("connection", (ws) => {
    START SERVER
 ===================================================== */
 
-server.listen(8080, () => {
-  console.log("✅ Universal Clipboard Server running on :8080");
+const PORT = process.env.PORT || 8080;
+server.listen(PORT, () => {
+  console.log(`✅ Universal Clipboard Server running on :${PORT}`);
 });
