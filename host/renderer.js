@@ -243,3 +243,100 @@ window.api.onPairingTimer((seconds) => {
   if (!timerEl) return;
   timerEl.textContent = seconds > 0 ? `Expires in ${seconds}s` : "";
 });
+
+/* =====================================================
+   CHAT
+===================================================== */
+
+const chatPanel     = document.getElementById("chatPanel");
+const chatMessages  = document.getElementById("chatMessages");
+const chatEmpty     = document.getElementById("chatEmpty");
+const chatInput     = document.getElementById("chatInput");
+const chatSendBtn   = document.getElementById("chatSendBtn");
+const chatToggleBtn = document.getElementById("chatToggleBtn");
+const chatBadge     = document.getElementById("chatBadge");
+
+let chatOpen   = false;
+let unreadCount = 0;
+
+// Toggle open/close
+chatToggleBtn.onclick = () => {
+  chatOpen = !chatOpen;
+  chatPanel.classList.toggle("open", chatOpen);
+  if (chatOpen) {
+    unreadCount = 0;
+    chatBadge.classList.remove("visible");
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+    chatInput.focus();
+  }
+};
+
+// Auto-resize textarea
+chatInput.addEventListener("input", () => {
+  chatInput.style.height = "auto";
+  chatInput.style.height = Math.min(chatInput.scrollHeight, 100) + "px";
+});
+
+// Send on Enter (Shift+Enter = newline)
+chatInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    sendChatMessage();
+  }
+});
+
+chatSendBtn.onclick = sendChatMessage;
+
+function sendChatMessage() {
+  const text = chatInput.value.trim();
+  if (!text) return;
+
+  appendMessage({ text, fromName: "You", timestamp: Date.now(), outgoing: true });
+
+  window.api.sendChat(text);
+
+  chatInput.value = "";
+  chatInput.style.height = "auto";
+  chatInput.focus();
+}
+
+function appendMessage({ text, fromName, timestamp, outgoing }) {
+  // Remove empty state placeholder
+  if (chatEmpty) chatEmpty.style.display = "none";
+
+  const group = document.createElement("div");
+  group.className = `msg-group ${outgoing ? "outgoing" : "incoming"}`;
+
+  const meta = document.createElement("div");
+  meta.className = "msg-meta";
+  const time = new Date(timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  meta.textContent = outgoing ? `You  ${time}` : `${fromName}  ${time}`;
+
+  const bubble = document.createElement("div");
+  bubble.className = "msg-bubble";
+  bubble.textContent = text;
+
+  group.appendChild(meta);
+  group.appendChild(bubble);
+  chatMessages.appendChild(group);
+
+  // Auto-scroll
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+
+  // Badge when panel is closed
+  if (!chatOpen && !outgoing) {
+    unreadCount++;
+    chatBadge.classList.add("visible");
+  }
+}
+
+// Receive messages from the other device
+window.api.onChatMessage((msg) => {
+  appendMessage({
+    text: msg.text,
+    fromName: msg.fromName || "Remote",
+    timestamp: msg.timestamp || Date.now(),
+    outgoing: false,
+  });
+});
+

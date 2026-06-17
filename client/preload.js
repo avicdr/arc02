@@ -17,4 +17,9 @@ contextBridge.exposeInMainWorld("api", {
 
   onClipboardHistory: (cb) =>
     ipcRenderer.on("clipboard-history", (_, data) => cb(data)),
+
+  /* -------- chat -------- */
+  sendChat: (text) => ipcRenderer.invoke("chat-send", text),
+  onChatMessage: (cb) => ipcRenderer.on("chat-msg", (_, msg) => cb(msg)),
 });
+

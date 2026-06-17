@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Clipboard Notification</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      html, body {
+        width: 100%;
+        height: 100%;
+        background: transparent;
+        overflow: hidden;
+        -webkit-app-region: no-drag;
+        user-select: none;
+      }
+
+      #notif {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 18px 10px 14px;
+        background: rgba(15, 15, 25, 0.88);
+        backdrop-filter: blur(18px) saturate(1.8);
+        -webkit-backdrop-filter: blur(18px) saturate(1.8);
+        border: 1px solid rgba(255, 255, 255, 0.10);
+        border-radius: 100px;
+        box-shadow:
+          0 4px 32px rgba(0, 0, 0, 0.55),
+          0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+
+        /* start hidden / scaled down */
+        opacity: 0;
+        transform: translateY(-16px) scale(0.94);
+        transition:
+          opacity 0.28s cubic-bezier(0.34, 1.56, 0.64, 1),
+          transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+        will-change: opacity, transform;
+        pointer-events: none;
+      }
+
+      #notif.visible {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+
+      .icon {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+        flex-shrink: 0;
+        box-shadow: 0 2px 8px rgba(99, 102, 241, 0.5);
+      }
+
+      .text-wrap {
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+        min-width: 0;
+      }
+
+      .label {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+        font-size: 11px;
+        font-weight: 600;
+        color: rgba(255, 255, 255, 0.45);
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      .content {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+        font-size: 13px;
+        font-weight: 500;
+        color: rgba(255, 255, 255, 0.95);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 280px;
+      }
+
+      .badge {
+        margin-left: 4px;
+        padding: 2px 8px;
+        border-radius: 100px;
+        font-size: 11px;
+        font-weight: 600;
+        background: rgba(99, 102, 241, 0.25);
+        color: #a5b4fc;
+        border: 1px solid rgba(99, 102, 241, 0.3);
+        flex-shrink: 0;
+      }
+
+      /* progress bar at bottom of pill */
+      .progress-track {
+        position: absolute;
+        bottom: 0;
+        left: 14px;
+        right: 14px;
+        height: 2px;
+        background: rgba(255,255,255,0.08);
+        border-radius: 100px;
+        overflow: hidden;
+      }
+
+      .progress-bar {
+        height: 100%;
+        border-radius: 100px;
+        background: linear-gradient(90deg, #6366f1, #8b5cf6);
+        width: 100%;
+        transform-origin: left;
+        transition: transform linear;
+      }
+
+      /* outer wrapper so pill is centered */
+      .outer {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+        padding-top: 8px;
+        position: relative;
+      }
+
+      #notif {
+        position: relative;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="outer">
+      <div id="notif">
+        <div class="icon" id="icon">📋</div>
+        <div class="text-wrap">
+          <div class="label">Clipboard Synced</div>
+          <div class="content" id="content">—</div>
+        </div>
+        <div class="badge" id="badge">Text</div>
+        <div class="progress-track">
+          <div class="progress-bar" id="progressBar"></div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const notifEl   = document.getElementById('notif');
+      const contentEl = document.getElementById('content');
+      const badgeEl   = document.getElementById('badge');
+      const iconEl    = document.getElementById('icon');
+      const barEl     = document.getElementById('progressBar');
+
+      let hideTimer = null;
+
+      function show(data) {
+        // Populate
+        if (data.contentType === 'image') {
+          iconEl.textContent  = '🖼';
+          badgeEl.textContent = 'Image';
+          contentEl.textContent = 'Image synced from host';
+        } else {
+          const text = data.text || '';
+          iconEl.textContent  = '📋';
+          badgeEl.textContent = 'Text';
+          contentEl.textContent = text.length > 60 ? text.slice(0, 60) + '…' : text;
+        }
+
+        // Animate in
+        notifEl.classList.add('visible');
+
+        // Progress bar countdown
+        const DURATION = 3000;
+        barEl.style.transition = 'none';
+        barEl.style.transform  = 'scaleX(1)';
+        // force reflow
+        barEl.offsetWidth;
+        barEl.style.transition = `transform ${DURATION}ms linear`;
+        barEl.style.transform  = 'scaleX(0)';
+
+        // Auto-hide
+        if (hideTimer) clearTimeout(hideTimer);
+        hideTimer = setTimeout(() => {
+          notifEl.classList.remove('visible');
+        }, DURATION);
+      }
+
+      // Listen for show-notification from main
+      if (window.__notifApi) {
+        window.__notifApi.onShow(show);
+      }
+    </script>
+  </body>
+</html>

@@ -222,6 +222,11 @@ ipcMain.handle("restore-history-item", (_, item) => {
 
 ipcMain.handle("pair-device", generatePairing);
 ipcMain.handle("request-pairing", generatePairing);
+
+ipcMain.handle("chat-send", (_, text) => {
+  if (!ws || ws.readyState !== WebSocket.OPEN || !text?.trim()) return;
+  ws.send(JSON.stringify({ type: "CHAT_MSG", text: text.trim() }));
+});
 ipcMain.handle("get-clipboard-history", () => history);
 ipcMain.handle("save-history-item", async (_, item) => {
   if (!item?.data && !item?.image) return;
@@ -290,6 +295,11 @@ function connectWebSocket() {
     if (data.type === "DEVICE_LIST") {
       devices = data.devices;
       send("devices-update", devices);
+      return;
+    }
+
+    if (data.type === "CHAT_MSG") {
+      send("chat-msg", data);
       return;
     }
 

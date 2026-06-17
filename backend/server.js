@@ -248,6 +248,31 @@ wss.on("connection", (ws) => {
         }
       }
     }
+
+    /* -------------------------------------------------
+       CHAT MESSAGE
+    ------------------------------------------------- */
+
+    if (data.type === "CHAT_MSG") {
+      const peers = users.get(device.userId);
+      if (!peers) return;
+
+      const relay = {
+        type: "CHAT_MSG",
+        text: String(data.text || "").slice(0, 2000), // cap length
+        fromName: device.name || device.platform,
+        fromDeviceId: device.deviceId,
+        timestamp: Date.now(),
+      };
+
+      for (const d of peers.values()) {
+        if (d.deviceId === device.deviceId) continue;
+        if (d.ws.readyState === WebSocket.OPEN) {
+          d.ws.send(JSON.stringify(relay));
+        }
+        // No offline queue for chat — live-only
+      }
+    }
   });
 
   ws.on("close", () => {

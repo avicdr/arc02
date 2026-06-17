@@ -8,6 +8,7 @@
   "main": "index.js",
   "scripts": {
     "start": "electron .",
+    "dev": "nodemon --exec \"electron .\" --watch . --ext js,html,css,json --ignore node_modules --ignore dist",
     "build:win": "electron-builder --win portable",
     "build:mac": "electron-builder --mac",
     "build": "electron-builder"

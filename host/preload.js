@@ -32,4 +32,9 @@ contextBridge.exposeInMainWorld("api", {
     ipcRenderer.invoke("update-device-rules", deviceId, rules),
 
   revokeDevice: (deviceId) => ipcRenderer.invoke("revoke-device", deviceId),
+
+  /* -------- chat -------- */
+  sendChat: (text) => ipcRenderer.invoke("chat-send", text),
+  onChatMessage: (cb) => ipcRenderer.on("chat-msg", (_, msg) => cb(msg)),
 });
+

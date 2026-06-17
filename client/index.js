@@ -17,6 +17,34 @@ const path = require("path");
 const fs = require("fs");
 const WebSocket = require("ws");
 const crypto = require("crypto");
+const { execFile, spawn } = require("child_process");
+
+/* ================= ELEVATION (Windows only) ================= */
+// If we're not already running as Administrator, relaunch via UAC.
+// Admin privilege lets us sit above Medium-integrity lockdown browsers.
+if (process.platform === "win32") {
+  const { execSync } = require("child_process");
+  let isAdmin = false;
+  try {
+    execSync("net session", { stdio: "ignore" });
+    isAdmin = true;
+  } catch (_) {
+    isAdmin = false;
+  }
+
+  if (!isAdmin) {
+    // Relaunch self with UAC elevation prompt
+    const exePath = process.execPath;
+    const args = process.argv.slice(1);
+    const psCmd = `Start-Process -FilePath '${exePath.replace(/'/g, "''")}' -ArgumentList '${args.map(a => a.replace(/'/g, "''")).join("','")}'  -Verb RunAs`;
+    try {
+      execFile("powershell.exe", ["-NoProfile", "-Command", psCmd]);
+    } catch (_) {
+      // User denied UAC — continue without elevation
+    }
+    app.quit();
+  }
+}
 
 /* ================= CONFIG ================= */
 
@@ -31,6 +59,7 @@ const DEVICE_NAME =
 /* ================= STATE ================= */
 
 let mainWindow;
+let notifWindow;
 let ws;
 
 let paired = false;
@@ -103,16 +132,144 @@ function addToHistory(entry) {
 
 /* ================= WINDOW ================= */
 
+function assertOnTop() {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.setAlwaysOnTop(true, "screen-saver", 1);
+    mainWindow.moveTop();
+  }
+}
+
+// Spawn a PowerShell loop that calls Win32 SetWindowPos(HWND_TOPMOST) directly
+// on our native HWND. This operates below Electron's JS layer and survives
+// most kiosk software window-order resets.
+let _nativeTopInterval = null;
+function startNativeTopmost(hwnd) {
+  if (process.platform !== "win32" || !hwnd) return;
+
+  // HWND_TOPMOST = -1, SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE = 0x13
+  const ps = `
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public class WinAPI {
+  [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+}
+"@
+$hwnd = [IntPtr]${hwnd}
+$HWND_TOPMOST = [IntPtr](-1)
+$SWP_FLAGS = 0x0013
+while ($true) {
+  [WinAPI]::SetWindowPos($hwnd, $HWND_TOPMOST, 0, 0, 0, 0, $SWP_FLAGS) | Out-Null
+  Start-Sleep -Milliseconds 250
+}
+`;
+
+  const child = spawn("powershell.exe", [
+    "-NoProfile",
+    "-WindowStyle", "Hidden",
+    "-Command", ps,
+  ], { detached: false, stdio: "ignore" });
+
+  child.unref();
+
+  // Kill the PS loop when the app exits
+  app.on("before-quit", () => { try { child.kill(); } catch (_) { } });
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 420,
     height: 560,
+    alwaysOnTop: true,
+    skipTaskbar: false,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
     },
   });
 
+  // Highest Electron-level z-order
+  mainWindow.setAlwaysOnTop(true, "screen-saver", 1);
+
+  // Re-assert on every blur/hide
+  mainWindow.on("blur", assertOnTop);
+  mainWindow.on("hide", assertOnTop);
+  mainWindow.on("focus", assertOnTop);
+
+  // JS-level safety net every 500 ms
+  setInterval(assertOnTop, 500);
+
+  // Start native Win32 SetWindowPos loop once we have the real HWND.
+  // HWNDs are 32-bit values even on 64-bit Windows, so readUInt32LE is always correct.
+  let _nativeStarted = false;
+  function kickNativeTopmost() {
+    if (_nativeStarted || mainWindow.isDestroyed()) return;
+    _nativeStarted = true;
+    const hwndBuf = mainWindow.getNativeWindowHandle();
+    const hwnd = hwndBuf.readUInt32LE(0).toString();
+    startNativeTopmost(hwnd);
+  }
+  mainWindow.once("show", kickNativeTopmost);
+  mainWindow.webContents.once("did-finish-load", kickNativeTopmost); // fallback
+
+  // Hide main window from screen capture (WDA_EXCLUDEFROMCAPTURE)
+  mainWindow.setContentProtection(true);
+
   mainWindow.loadFile("index.html");
+}
+
+/* ================= NOTIFICATION WINDOW ================= */
+
+function createNotifWindow() {
+  const { screen } = require("electron");
+  const { width: sw } = screen.getPrimaryDisplay().workAreaSize;
+
+  const WIN_W = 420;
+  const WIN_H = 80;
+
+  notifWindow = new BrowserWindow({
+    width: WIN_W,
+    height: WIN_H,
+    x: Math.round((sw - WIN_W) / 2),
+    y: 0,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    resizable: false,
+    movable: false,
+    focusable: false,
+    hasShadow: false,
+    webPreferences: {
+      preload: path.join(__dirname, "notification-preload.js"),
+      contextIsolation: true,
+    },
+  });
+
+  // Highest z-order layer — screen-saver level
+  notifWindow.setAlwaysOnTop(true, "screen-saver", 2);
+
+  // Hide from screen recording (SecureView / WDA_EXCLUDEFROMCAPTURE)
+  notifWindow.setContentProtection(true);
+
+  notifWindow.loadFile("notification.html");
+
+  // Show (but not focused) and start native topmost loop after load
+  notifWindow.webContents.once("did-finish-load", () => {
+    notifWindow.showInactive();
+    // Make the window fully click-through so it never blocks mouse input
+    notifWindow.setIgnoreMouseEvents(true, { forward: true });
+
+    if (process.platform === "win32") {
+      const hwndBuf = notifWindow.getNativeWindowHandle();
+      const hwnd = hwndBuf.readUInt32LE(0).toString();
+      startNativeTopmost(hwnd);
+    }
+  });
+}
+
+function showNotification(data) {
+  if (!notifWindow || notifWindow.isDestroyed()) return;
+  notifWindow.webContents.send("notif-show", data);
 }
 
 /* ================= WEBSOCKET ================= */
@@ -178,6 +335,11 @@ function connectWebSocket() {
       return;
     }
 
+    if (paired && data.type === "CHAT_MSG") {
+      send("chat-msg", data);
+      return;
+    }
+
     /* ---------- IMAGE RECEIVE ---------- */
 
     if (paired && data.type === "CLIP_SYNC" && data.contentType === "image") {
@@ -200,6 +362,7 @@ function connectWebSocket() {
 
       addToHistory(entry);
       send("clipboard-update", entry);
+      showNotification({ contentType: "image" });
 
       setTimeout(() => (isRemoteWrite = false), 300);
       return;
@@ -232,6 +395,7 @@ function connectWebSocket() {
 
       addToHistory(entry);
       send("clipboard-update", entry);
+      showNotification({ contentType: "text", text });
 
       setTimeout(() => (isRemoteWrite = false), 300);
     }
@@ -341,6 +505,11 @@ ipcMain.handle("pair-with-code", (_, code) => {
   );
 });
 
+ipcMain.handle("chat-send", (_, text) => {
+  if (!ws || ws.readyState !== WebSocket.OPEN || !paired || !text?.trim()) return;
+  ws.send(JSON.stringify({ type: "CHAT_MSG", text: text.trim() }));
+});
+
 ipcMain.handle("restore-history-item", (_, item) => {
   isRemoteWrite = true;
 
@@ -376,12 +545,3 @@ ipcMain.handle("save-history-item", async (_, item) => {
 });
 
 /* ================= APP ================= */
-
-app.whenReady().then(() => {
-  createWindow();
-  connectWebSocket();
-});
-
-app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") app.quit();
-});
